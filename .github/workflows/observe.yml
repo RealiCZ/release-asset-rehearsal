@@ -1,0 +1,27 @@
+name: Observe release
+on:
+  release:
+    types: [created, published]
+permissions:
+  contents: read
+jobs:
+  observe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Observe release via REST
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          action="$(jq -er '.action' "$GITHUB_EVENT_PATH")"
+          id="$(jq -er '.release.id' "$GITHUB_EVENT_PATH")"
+          tag="$(jq -er '.release.tag_name' "$GITHUB_EVENT_PATH")"
+          observation="$(gh api "repos/$GITHUB_REPOSITORY/releases/$id" |
+            jq -c --arg action "$action" --arg tag "$tag" \
+              '{action: $action, tag: $tag, id, draft, immutable, assets: [.assets[] | {name, state}]}')"
+          printf 'RELEASE_OBSERVATION %s\n' "$observation"
+          {
+            printf '### Release observation\n\n'
+            printf '\x60\x60\x60json\n%s\n\x60\x60\x60\n' "$observation"
+          } >> "$GITHUB_STEP_SUMMARY"
